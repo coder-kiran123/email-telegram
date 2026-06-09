@@ -454,6 +454,9 @@ class WebhookHandler(BaseHTTPRequestHandler):
             d = load_data()
             if action == "reset":
                 d["totals"] = {"❤": 0.0, "😂": 0.0, "👍": 0.0, "🔥": 0.0}
+                d["messages"] = {}
+                d["counted"] = {}
+                d["reaction_counts"] = {}
                 save_data(d)
                 self._serve_admin("All balances reset to $0.00", authed=True)
                 return
