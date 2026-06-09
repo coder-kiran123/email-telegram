@@ -1,5 +1,6 @@
 import imaplib
 import email
+import html
 import os
 import time
 import requests
@@ -105,10 +106,10 @@ def check_mail():
 
             text = (
                 f"📧 <b>New Email</b>\n\n"
-                f"<b>From:</b> {from_raw}\n"
-                f"<b>Subject:</b> {subject}\n"
-                f"<b>Date:</b> {date}\n\n"
-                f"{body}"
+                f"<b>From:</b> {html.escape(from_raw)}\n"
+                f"<b>Subject:</b> {html.escape(subject)}\n"
+                f"<b>Date:</b> {html.escape(date)}\n\n"
+                f"{html.escape(body)}"
             )
 
             send_telegram(text)
