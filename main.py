@@ -34,12 +34,30 @@ def decode_str(value):
 def clean_body(text):
     # Remove URLs
     text = re.sub(r'https?://\S+', '', text)
-    # Collapse blank lines
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    # Remove empty parentheses left by URL removal
+    text = re.sub(r'\(\s*\)', '', text)
     # Strip lines that are only whitespace
     lines = [l.rstrip() for l in text.splitlines()]
     lines = [l for l in lines if l.strip()]
-    return "\n".join(lines).strip()
+    # Drop footer lines (legal, unsubscribe, copyright boilerplate)
+    footer_triggers = (
+        "unsubscribe", "privacy policy", "all rights reserved",
+        "do not reply", "please do not reply", "©", "po box",
+        "fdic", "member fdic", "this email was sent",
+        "questions? we're here", "💚 from", "trustpilot",
+    )
+    clean = []
+    for line in lines:
+        if any(t in line.lower() for t in footer_triggers):
+            break
+        clean.append(line)
+    text = "\n".join(clean).strip()
+    # Collapse excess blank lines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    # Hard cap at 600 chars
+    if len(text) > 600:
+        text = text[:600].rsplit("\n", 1)[0] + "\n..."
+    return text
 
 
 def get_body(msg):
