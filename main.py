@@ -543,14 +543,13 @@ def check_mail():
 
             if message_id:
                 amount = extract_amount(subject)
-                if amount is not None:
-                    with data_lock:
-                        d = load_data()
-                        d["messages"][str(message_id)] = {
-                            "subject": subject,
-                            "amount": amount
-                        }
-                        save_data(d)
+                with data_lock:
+                    d = load_data()
+                    d["messages"][str(message_id)] = {
+                        "subject": subject,
+                        "amount": amount
+                    }
+                    save_data(d)
 
             print(f"Forwarded: {subject} from {from_addr}")
 
