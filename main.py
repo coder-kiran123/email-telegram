@@ -271,6 +271,7 @@ def watch_reactions():
                     display += f" (@{username})"
 
                 msg_id = str(reaction.get("message_id", ""))
+                print(f"DEBUG reaction update: msg_id={msg_id} new={new_reactions} old={old_reactions}")
 
                 # Reaction removed
                 if not new_reactions and old_reactions:
@@ -319,9 +320,11 @@ def watch_reactions():
 
                 with data_lock:
                     d = load_data()
+                    print(f"DEBUG stored messages: {list(d['messages'].keys())}")
                     msg_info = d["messages"].get(msg_id, {})
                     subject = msg_info.get("subject", "Unknown email")
                     amount = msg_info.get("amount")
+                    print(f"DEBUG msg_info={msg_info} emoji={emoji}")
 
                     if amount is not None:
                         d["totals"][emoji] = round(d["totals"].get(emoji, 0.0) + amount, 2)
