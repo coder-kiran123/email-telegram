@@ -238,14 +238,8 @@ def watch_reactions():
                     continue
 
                 new_reactions = reaction.get("new_reaction", [])
-                if not new_reactions:
-                    continue
+                old_reactions = reaction.get("old_reaction", [])
 
-                emoji = new_reactions[0].get("emoji", "")
-                if emoji not in REACTION_LABELS:
-                    continue
-
-                label = REACTION_LABELS[emoji]
                 user = reaction.get("user", {})
                 name = user.get("first_name", "Someone")
                 last = user.get("last_name", "")
@@ -255,6 +249,51 @@ def watch_reactions():
                     display += f" (@{username})"
 
                 msg_id = str(reaction.get("message_id", ""))
+
+                # Reaction removed
+                if not new_reactions and old_reactions:
+                    emoji = old_reactions[0].get("emoji", "")
+                    if emoji not in REACTION_LABELS:
+                        continue
+                    label = REACTION_LABELS[emoji]
+
+                    with data_lock:
+                        d = load_data()
+                        msg_info = d["messages"].get(msg_id, {})
+                        subject = msg_info.get("subject", "Unknown email")
+                        amount = msg_info.get("amount")
+
+                        if amount is not None:
+                            d["totals"][emoji] = round(max(0.0, d["totals"].get(emoji, 0.0) - amount), 2)
+                            save_data(d)
+
+                        totals = d["totals"]
+
+                    amount_line = f"<b>Amount:</b> -${amount:.2f}\n" if amount is not None else ""
+                    notify = (
+                        f"❌ <b>Reaction Removed</b>\n\n"
+                        f"<b>Who:</b> {html.escape(display)}\n"
+                        f"<b>Removed:</b> {emoji} {label}\n"
+                        f"<b>Email:</b> {html.escape(subject)}\n"
+                        f"{amount_line}\n"
+                        f"❤️ Love total:  ${totals.get('❤️', 0.0):.2f}\n"
+                        f"😂 Haha total:  ${totals.get('😂', 0.0):.2f}\n"
+                        f"👍 Like total:  ${totals.get('👍', 0.0):.2f}\n"
+                        f"🔥 Fire total:  ${totals.get('🔥', 0.0):.2f}"
+                    )
+                    send_telegram(notify)
+                    print(f"Reaction {emoji} removed by {display} on msg {msg_id}")
+                    continue
+
+                # Reaction added
+                if not new_reactions:
+                    continue
+
+                emoji = new_reactions[0].get("emoji", "")
+                if emoji not in REACTION_LABELS:
+                    continue
+
+                label = REACTION_LABELS[emoji]
 
                 with data_lock:
                     d = load_data()
@@ -269,7 +308,6 @@ def watch_reactions():
                     totals = d["totals"]
 
                 amount_line = f"<b>Amount:</b> ${amount:.2f}\n" if amount is not None else ""
-
                 notify = (
                     f"👀 <b>New Reaction</b>\n\n"
                     f"<b>Who:</b> {html.escape(display)}\n"
