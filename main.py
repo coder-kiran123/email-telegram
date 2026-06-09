@@ -1,6 +1,7 @@
 import imaplib
 import email
 import html
+import re
 import os
 import time
 import requests
@@ -30,6 +31,17 @@ def decode_str(value):
     return "".join(result)
 
 
+def clean_body(text):
+    # Remove URLs
+    text = re.sub(r'https?://\S+', '', text)
+    # Collapse blank lines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    # Strip lines that are only whitespace
+    lines = [l.rstrip() for l in text.splitlines()]
+    lines = [l for l in lines if l.strip()]
+    return "\n".join(lines).strip()
+
+
 def get_body(msg):
     body = ""
     if msg.is_multipart():
@@ -51,7 +63,7 @@ def get_body(msg):
             )
         except Exception:
             pass
-    return body.strip()
+    return clean_body(body)
 
 
 def send_telegram(text):
