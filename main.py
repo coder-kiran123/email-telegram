@@ -51,7 +51,7 @@ def load_data():
 
 
 def save_data(data):
-    # Atomic write: write to temp file then rename to avoid corruption
+    os.makedirs(os.path.dirname(DATA_FILE) or ".", exist_ok=True)
     tmp = DATA_FILE + ".tmp"
     with open(tmp, "w") as f:
         json.dump(data, f)
@@ -551,6 +551,7 @@ def check_mail():
                         "amount": amount
                     }
                     save_data(d)
+                print(f"Stored msg_id={message_id} subject={subject} amount={amount}")
 
             print(f"Forwarded: {subject} from {from_addr}")
 
