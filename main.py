@@ -49,8 +49,18 @@ def load_data():
 
 
 def save_data(data):
-    with open(DATA_FILE, "w") as f:
+    # Atomic write: write to temp file then rename to avoid corruption
+    tmp = DATA_FILE + ".tmp"
+    with open(tmp, "w") as f:
         json.dump(data, f)
+    os.replace(tmp, DATA_FILE)
+    # Keep only last 500 messages to prevent unbounded growth
+    if len(data.get("messages", {})) > 500:
+        keys = list(data["messages"].keys())
+        for k in keys[:-500]:
+            data["messages"].pop(k, None)
+            data.get("counted", {}).pop(k, None)
+            data.get("reaction_counts", {}).pop(k, None)
 
 
 def decode_str(value):
@@ -271,7 +281,11 @@ def _handle_reaction_count(reaction_count):
         save_data(d)
         totals = d["totals"]
 
-    if changed_emoji:
+    should_notify = changed_emoji and (
+        (added and not already_counted) or
+        (not added and already_counted)
+    )
+    if should_notify:
         label = REACTION_LABELS.get(changed_emoji, changed_emoji)
         icon = "👀" if added else "❌"
         action = "New Reaction" if added else "Reaction Removed"
@@ -332,6 +346,9 @@ class WebhookHandler(BaseHTTPRequestHandler):
         body = self.rfile.read(length)
         self.send_response(200)
         self.end_headers()
+        threading.Thread(target=self._process, args=(body,), daemon=True).start()
+
+    def _process(self, body):
         try:
             update = json.loads(body)
             process_update(update)
