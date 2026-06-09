@@ -251,11 +251,22 @@ def _handle_reaction_count(reaction_count):
         subject = msg_info.get("subject", "Unknown email")
         amount = msg_info.get("amount")
 
+        # Track which messages have already been counted per emoji (once per message rule)
+        if "counted" not in d:
+            d["counted"] = {}
+        counted_key = f"{msg_id}_{changed_emoji}"
+
         if changed_emoji and amount is not None:
-            if added:
+            already_counted = d["counted"].get(counted_key, False)
+            curr_count = curr_counts.get(changed_emoji, 0)
+            if added and not already_counted:
+                # First reaction on this message with this emoji — count it
                 d["totals"][changed_emoji] = round(d["totals"].get(changed_emoji, 0.0) + amount, 2)
-            else:
+                d["counted"][counted_key] = True
+            elif not added and already_counted and curr_count == 0:
+                # All reactions removed — deduct and unmark
                 d["totals"][changed_emoji] = round(max(0.0, d["totals"].get(changed_emoji, 0.0) - amount), 2)
+                d["counted"][counted_key] = False
 
         save_data(d)
         totals = d["totals"]
@@ -282,11 +293,18 @@ def _update_total(msg_id, emoji, add, display=""):
         subject = msg_info.get("subject", "Unknown email")
         amount = msg_info.get("amount")
 
+        if "counted" not in d:
+            d["counted"] = {}
+        counted_key = f"{msg_id}_{emoji}"
+        already_counted = d["counted"].get(counted_key, False)
+
         if amount is not None:
-            if add:
+            if add and not already_counted:
                 d["totals"][emoji] = round(d["totals"].get(emoji, 0.0) + amount, 2)
-            else:
+                d["counted"][counted_key] = True
+            elif not add and already_counted:
                 d["totals"][emoji] = round(max(0.0, d["totals"].get(emoji, 0.0) - amount), 2)
+                d["counted"][counted_key] = False
             save_data(d)
 
         totals = d["totals"]
