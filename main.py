@@ -232,6 +232,71 @@ def handle_commands(update):
     send_telegram(reply)
 
 
+def handle_reaction_count(reaction_count):
+    msg_id = str(reaction_count.get("message_id", ""))
+    reactions = reaction_count.get("reactions", [])
+    print(f"DEBUG reaction_count: msg_id={msg_id} reactions={reactions}")
+
+    with data_lock:
+        d = load_data()
+        msg_info = d["messages"].get(msg_id, {})
+        subject = msg_info.get("subject", "Unknown email")
+        amount = msg_info.get("amount")
+        prev_counts = d.get("reaction_counts", {}).get(msg_id, {})
+
+        # Build current counts
+        curr_counts = {}
+        for r in reactions:
+            emoji = r.get("type", {}).get("emoji", "").replace("❤️", "❤")
+            curr_counts[emoji] = r.get("total_count", 0)
+
+        # Find which emojis changed
+        changed_emoji = None
+        added = True
+        for emoji in REACTION_LABELS:
+            prev = prev_counts.get(emoji, 0)
+            curr = curr_counts.get(emoji, 0)
+            if curr > prev:
+                changed_emoji = emoji
+                added = True
+                break
+            elif curr < prev:
+                changed_emoji = emoji
+                added = False
+                break
+
+        # Update stored counts
+        if "reaction_counts" not in d:
+            d["reaction_counts"] = {}
+        d["reaction_counts"][msg_id] = curr_counts
+
+        if changed_emoji and amount is not None:
+            if added:
+                d["totals"][changed_emoji] = round(d["totals"].get(changed_emoji, 0.0) + amount, 2)
+            else:
+                d["totals"][changed_emoji] = round(max(0.0, d["totals"].get(changed_emoji, 0.0) - amount), 2)
+
+        save_data(d)
+        totals = d["totals"]
+
+    if changed_emoji:
+        label = REACTION_LABELS.get(changed_emoji, changed_emoji)
+        action = "New Reaction" if added else "Reaction Removed"
+        icon = "👀" if added else "❌"
+        amount_line = f"<b>Amount:</b> {'+'if added else '-'}${amount:.2f}\n" if amount is not None else ""
+        notify = (
+            f"{icon} <b>{action}</b>\n\n"
+            f"<b>Reaction:</b> {changed_emoji} {label}\n"
+            f"<b>Email:</b> {html.escape(subject)}\n"
+            f"{amount_line}\n"
+            f"❤️ Love total:  ${totals.get('❤', 0.0):.2f}\n"
+            f"😂 Haha total:  ${totals.get('😂', 0.0):.2f}\n"
+            f"👍 Like total:  ${totals.get('👍', 0.0):.2f}\n"
+            f"🔥 Fire total:  ${totals.get('🔥', 0.0):.2f}"
+        )
+        send_telegram(notify)
+
+
 def watch_reactions():
     offset = None
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
@@ -240,7 +305,7 @@ def watch_reactions():
         try:
             params = {
                 "timeout": 30,
-                "allowed_updates": ["message_reaction", "message", "channel_post"],
+                "allowed_updates": ["message_reaction", "message_reaction_count", "message", "channel_post"],
             }
             if offset:
                 params["offset"] = offset
@@ -254,7 +319,15 @@ def watch_reactions():
 
             for update in data.get("result", []):
                 offset = update["update_id"] + 1
+                print(f"DEBUG update keys: {list(update.keys())}")
                 handle_commands(update)
+
+                # Handle channel reaction counts (anonymous reactions)
+                reaction_count = update.get("message_reaction_count")
+                if reaction_count:
+                    handle_reaction_count(reaction_count)
+                    continue
+
                 reaction = update.get("message_reaction")
                 if not reaction:
                     continue
