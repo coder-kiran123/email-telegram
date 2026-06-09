@@ -6,6 +6,7 @@ import re
 import os
 import time
 import threading
+import urllib.parse
 import requests
 from email.header import decode_header
 from email.utils import parseaddr
@@ -20,8 +21,9 @@ BOT_TOKEN      = os.getenv("TELEGRAM_BOT_TOKEN", "")
 CHAT_ID        = os.getenv("TELEGRAM_CHAT_ID", "")
 POLL_INTERVAL  = int(os.getenv("POLL_INTERVAL", "30"))
 DATA_FILE      = os.getenv("DATA_FILE", "data.json")
-WEBHOOK_URL    = os.getenv("WEBHOOK_URL", "")   # e.g. https://yourapp.railway.app
+WEBHOOK_URL    = os.getenv("WEBHOOK_URL", "")
 PORT           = int(os.getenv("PORT", "8080"))
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 REACTION_LABELS = {
     "❤️": "Love",
@@ -340,13 +342,128 @@ def _update_total(msg_id, emoji, add, display=""):
     send_telegram(notify)
 
 
+ADMIN_HTML = """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Balance Admin</title>
+<style>
+  body {{ font-family: sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; background: #f5f5f5; }}
+  h2 {{ text-align: center; }}
+  .card {{ background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+  .row {{ display: flex; align-items: center; margin-bottom: 16px; gap: 12px; }}
+  .label {{ font-size: 1.3em; width: 40px; }}
+  .name {{ flex: 1; font-weight: bold; }}
+  input[type=number] {{ width: 100px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; }}
+  button {{ padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em; }}
+  .save {{ background: #4CAF50; color: white; }}
+  .reset-all {{ width: 100%; margin-top: 8px; background: #f44336; color: white; padding: 12px; font-size: 1em; border-radius: 8px; border: none; cursor: pointer; }}
+  .msg {{ text-align: center; padding: 10px; border-radius: 6px; margin-bottom: 16px; }}
+  .success {{ background: #e8f5e9; color: #2e7d32; }}
+  .login {{ display: flex; flex-direction: column; gap: 12px; }}
+  .login input {{ padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; }}
+  .login button {{ background: #2196F3; color: white; padding: 12px; font-size: 1em; }}
+</style>
+</head>
+<body>
+<h2>💰 Balance Admin</h2>
+{message}
+<div class="card">
+{content}
+</div>
+</body>
+</html>"""
+
+LOGIN_FORM = """<form class="login" method="POST" action="/admin">
+  <input type="hidden" name="action" value="login">
+  <input type="password" name="password" placeholder="Enter admin password">
+  <button type="submit">Login</button>
+</form>"""
+
+def admin_dashboard(totals, msg=""):
+    msg_html = f'<div class="msg success">{msg}</div>' if msg else ""
+    rows = ""
+    for emoji, label in [("❤", "Love"), ("😂", "Haha"), ("👍", "Like"), ("🔥", "Fire")]:
+        val = totals.get(emoji, 0.0)
+        rows += f"""<div class="row">
+  <span class="label">{emoji}</span>
+  <span class="name">{label}</span>
+  <input type="number" name="{emoji}" value="{val:.2f}" step="0.01" min="0">
+  <button class="save" type="submit" name="action" value="save_{emoji}">Save</button>
+</div>"""
+    form = f"""<form method="POST" action="/admin">
+  <input type="hidden" name="password" value="__token__">
+  {rows}
+  <button class="reset-all" type="submit" name="action" value="reset">Reset All to $0.00</button>
+</form>"""
+    return ADMIN_HTML.format(message=msg_html, content=form)
+
+
 class WebhookHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/admin":
+            self._serve_admin()
+        else:
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
+
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length)
+        ct = self.headers.get("Content-Type", "")
+
+        if self.path == "/admin":
+            self._handle_admin_post(body)
+            return
+
+        # Telegram webhook
         self.send_response(200)
         self.end_headers()
         threading.Thread(target=self._process, args=(body,), daemon=True).start()
+
+    def _serve_admin(self, msg="", authed=False):
+        with data_lock:
+            d = load_data()
+        if authed:
+            page = admin_dashboard(d["totals"], msg).replace("__token__", ADMIN_PASSWORD)
+        else:
+            page = ADMIN_HTML.format(message="", content=LOGIN_FORM)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(page.encode())
+
+    def _handle_admin_post(self, body):
+        params = urllib.parse.parse_qs(body.decode())
+        password = params.get("password", [""])[0]
+        action = params.get("action", [""])[0]
+
+        if password != ADMIN_PASSWORD:
+            self._serve_admin()
+            return
+
+        with data_lock:
+            d = load_data()
+            if action == "reset":
+                d["totals"] = {"❤": 0.0, "😂": 0.0, "👍": 0.0, "🔥": 0.0}
+                save_data(d)
+                self._serve_admin("All balances reset to $0.00", authed=True)
+                return
+            for emoji in ["❤", "😂", "👍", "🔥"]:
+                if action == f"save_{emoji}":
+                    try:
+                        val = float(params.get(emoji, ["0"])[0])
+                        d["totals"][emoji] = round(max(0.0, val), 2)
+                        save_data(d)
+                    except ValueError:
+                        pass
+                    label = REACTION_LABELS.get(emoji, emoji)
+                    self._serve_admin(f"{emoji} {label} updated to ${d['totals'][emoji]:.2f}", authed=True)
+                    return
+
+        self._serve_admin("", authed=True)
 
     def _process(self, body):
         try:
@@ -356,7 +473,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
             print(f"Webhook error: {e}")
 
     def log_message(self, *args):
-        pass  # suppress access logs
+        pass
 
 
 def start_webhook_server():
