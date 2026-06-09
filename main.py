@@ -22,6 +22,7 @@ DATA_FILE      = os.getenv("DATA_FILE", "data.json")
 
 REACTION_LABELS = {
     "❤️": "Love",
+    "❤": "Love",
     "😂": "Haha",
     "👍": "Like",
     "🔥": "Fire",
@@ -37,7 +38,7 @@ def load_data():
                 return json.load(f)
         except Exception:
             pass
-    return {"totals": {"❤️": 0.0, "😂": 0.0, "👍": 0.0, "🔥": 0.0}, "messages": {}}
+    return {"totals": {"❤": 0.0, "😂": 0.0, "👍": 0.0, "🔥": 0.0}, "messages": {}}
 
 
 def save_data(data):
@@ -223,7 +224,7 @@ def handle_commands(update):
         totals = d["totals"]
     reply = (
         f"💰 <b>Current Totals</b>\n\n"
-        f"❤️ Love total:  ${totals.get('❤️', 0.0):.2f}\n"
+        f"❤️ Love total:  ${totals.get('❤', 0.0):.2f}\n"
         f"😂 Haha total:  ${totals.get('😂', 0.0):.2f}\n"
         f"👍 Like total:  ${totals.get('👍', 0.0):.2f}\n"
         f"🔥 Fire total:  ${totals.get('🔥', 0.0):.2f}"
@@ -273,7 +274,7 @@ def watch_reactions():
 
                 # Reaction removed
                 if not new_reactions and old_reactions:
-                    emoji = old_reactions[0].get("emoji", "")
+                    emoji = old_reactions[0].get("emoji", "").replace("❤️", "❤")
                     if emoji not in REACTION_LABELS:
                         continue
                     label = REACTION_LABELS[emoji]
@@ -297,7 +298,7 @@ def watch_reactions():
                         f"<b>Removed:</b> {emoji} {label}\n"
                         f"<b>Email:</b> {html.escape(subject)}\n"
                         f"{amount_line}\n"
-                        f"❤️ Love total:  ${totals.get('❤️', 0.0):.2f}\n"
+                        f"❤️ Love total:  ${totals.get('❤', 0.0):.2f}\n"
                         f"😂 Haha total:  ${totals.get('😂', 0.0):.2f}\n"
                         f"👍 Like total:  ${totals.get('👍', 0.0):.2f}\n"
                         f"🔥 Fire total:  ${totals.get('🔥', 0.0):.2f}"
@@ -310,7 +311,7 @@ def watch_reactions():
                 if not new_reactions:
                     continue
 
-                emoji = new_reactions[0].get("emoji", "")
+                emoji = new_reactions[0].get("emoji", "").replace("❤️", "❤")
                 if emoji not in REACTION_LABELS:
                     continue
 
@@ -335,7 +336,7 @@ def watch_reactions():
                     f"<b>Reaction:</b> {emoji} {label}\n"
                     f"<b>Email:</b> {html.escape(subject)}\n"
                     f"{amount_line}\n"
-                    f"❤️ Love total:  ${totals.get('❤️', 0.0):.2f}\n"
+                    f"❤️ Love total:  ${totals.get('❤', 0.0):.2f}\n"
                     f"😂 Haha total:  ${totals.get('😂', 0.0):.2f}\n"
                     f"👍 Like total:  ${totals.get('👍', 0.0):.2f}\n"
                     f"🔥 Fire total:  ${totals.get('🔥', 0.0):.2f}"
