@@ -263,11 +263,12 @@ def _handle_reaction_count(reaction_count):
         subject = msg_info.get("subject", "Unknown email")
         amount = msg_info.get("amount")
 
-        # Once per message total: count amount only once regardless of emoji
         if "counted" not in d:
             d["counted"] = {}
         already_counted = d["counted"].get(msg_id)
         all_removed = sum(curr_counts.values()) == 0
+
+        print(f"DEBUG msg_info={msg_info} already_counted={already_counted} changed_emoji={changed_emoji} added={added} all_removed={all_removed}")
 
         if changed_emoji and amount is not None:
             if added and not already_counted:
