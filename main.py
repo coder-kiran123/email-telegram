@@ -211,6 +211,26 @@ def check_mail():
         print(f"Error: {e}")
 
 
+def handle_commands(update):
+    msg = update.get("message") or update.get("channel_post")
+    if not msg:
+        return
+    text = msg.get("text", "").strip()
+    if text.lower() not in ("/total", "/total@" + "emailsender3214bot"):
+        return
+    with data_lock:
+        d = load_data()
+        totals = d["totals"]
+    reply = (
+        f"💰 <b>Current Totals</b>\n\n"
+        f"❤️ Love total:  ${totals.get('❤️', 0.0):.2f}\n"
+        f"😂 Haha total:  ${totals.get('😂', 0.0):.2f}\n"
+        f"👍 Like total:  ${totals.get('👍', 0.0):.2f}\n"
+        f"🔥 Fire total:  ${totals.get('🔥', 0.0):.2f}"
+    )
+    send_telegram(reply)
+
+
 def watch_reactions():
     offset = None
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
@@ -219,7 +239,7 @@ def watch_reactions():
         try:
             params = {
                 "timeout": 30,
-                "allowed_updates": ["message_reaction"],
+                "allowed_updates": ["message_reaction", "message", "channel_post"],
             }
             if offset:
                 params["offset"] = offset
@@ -233,6 +253,7 @@ def watch_reactions():
 
             for update in data.get("result", []):
                 offset = update["update_id"] + 1
+                handle_commands(update)
                 reaction = update.get("message_reaction")
                 if not reaction:
                     continue
