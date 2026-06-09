@@ -31,8 +31,7 @@ PORT           = int(os.getenv("PORT", "8080"))
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 REACTION_LABELS = {
-    "❤️": "Love",
-    "❤":  "Love",
+    "❤": "Love",
     "😂": "Haha",
     "👍": "Like",
     "🔥": "Fire",
@@ -57,17 +56,17 @@ def load_data():
 
 def save_data(data):
     os.makedirs(os.path.dirname(DATA_FILE) or ".", exist_ok=True)
-    tmp = DATA_FILE + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(data, f)
-    os.replace(tmp, DATA_FILE)
-    # Keep only last 500 messages to prevent unbounded growth
+    # Trim old messages before saving
     if len(data.get("messages", {})) > 500:
         keys = list(data["messages"].keys())
         for k in keys[:-500]:
             data["messages"].pop(k, None)
             data.get("counted", {}).pop(k, None)
             data.get("reaction_counts", {}).pop(k, None)
+    tmp = DATA_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f)
+    os.replace(tmp, DATA_FILE)
 
 
 def decode_str(value):
@@ -331,11 +330,12 @@ def _update_total(msg_id, emoji, add, display=""):
             save_data(d)
 
         totals = d["totals"]
+        did_change = (add and not already_counted) or (not add and already_counted == emoji)
 
     label = REACTION_LABELS.get(emoji, emoji)
     icon = "👀" if add else "❌"
     action = "New Reaction" if add else "Reaction Removed"
-    amount_line = f"<b>Amount:</b> {'+'if add else '-'}${amount:.2f}\n" if amount is not None else ""
+    amount_line = f"<b>Amount:</b> {'+'if add else '-'}${amount:.2f}\n" if (amount is not None and did_change) else ""
     who_line = f"<b>Who:</b> {html.escape(display)}\n" if display else ""
     notify = (
         f"{icon} <b>{action}</b>\n\n"
