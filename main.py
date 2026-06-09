@@ -36,28 +36,39 @@ def clean_body(text):
     text = re.sub(r'https?://\S+', '', text)
     # Remove empty parentheses left by URL removal
     text = re.sub(r'\(\s*\)', '', text)
-    # Strip lines that are only whitespace
-    lines = [l.rstrip() for l in text.splitlines()]
-    lines = [l for l in lines if l.strip()]
-    # Drop footer lines (legal, unsubscribe, copyright boilerplate)
+    # Drop footer lines
     footer_triggers = (
         "unsubscribe", "privacy policy", "all rights reserved",
         "do not reply", "please do not reply", "©", "po box",
         "fdic", "member fdic", "this email was sent",
         "questions? we're here", "💚 from", "trustpilot",
     )
-    clean = []
+    lines = text.splitlines()
+    trimmed = []
     for line in lines:
         if any(t in line.lower() for t in footer_triggers):
             break
-        clean.append(line)
-    text = "\n".join(clean).strip()
-    # Collapse excess blank lines
-    text = re.sub(r'\n{3,}', '\n\n', text)
+        trimmed.append(line)
+
+    # Unwrap soft-wrapped lines: join lines that don't end a sentence
+    paragraphs = []
+    current = []
+    for line in trimmed:
+        stripped = line.strip()
+        if not stripped:
+            if current:
+                paragraphs.append(" ".join(current))
+                current = []
+        else:
+            current.append(stripped)
+    if current:
+        paragraphs.append(" ".join(current))
+
+    text = "\n\n".join(p for p in paragraphs if p.strip())
     # Hard cap at 600 chars
     if len(text) > 600:
-        text = text[:600].rsplit("\n", 1)[0] + "\n..."
-    return text
+        text = text[:600].rsplit(" ", 1)[0] + "..."
+    return text.strip()
 
 
 def get_body(msg):
