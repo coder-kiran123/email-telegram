@@ -24,6 +24,7 @@ REACTION_LABELS = {
     "❤️": "Love",
     "😂": "Haha",
     "👍": "Like",
+    "🔥": "Fire",
 }
 
 data_lock = threading.Lock()
@@ -36,7 +37,7 @@ def load_data():
                 return json.load(f)
         except Exception:
             pass
-    return {"totals": {"❤️": 0.0, "😂": 0.0, "👍": 0.0}, "messages": {}}
+    return {"totals": {"❤️": 0.0, "😂": 0.0, "👍": 0.0, "🔥": 0.0}, "messages": {}}
 
 
 def save_data(data):
@@ -277,7 +278,8 @@ def watch_reactions():
                     f"{amount_line}\n"
                     f"❤️ Love total:  ${totals.get('❤️', 0.0):.2f}\n"
                     f"😂 Haha total:  ${totals.get('😂', 0.0):.2f}\n"
-                    f"👍 Like total:  ${totals.get('👍', 0.0):.2f}"
+                    f"👍 Like total:  ${totals.get('👍', 0.0):.2f}\n"
+                    f"🔥 Fire total:  ${totals.get('🔥', 0.0):.2f}"
                 )
                 send_telegram(notify)
                 print(f"Reaction {emoji} from {display} on msg {msg_id}")
